@@ -1,0 +1,1366 @@
+---
+layout: post
+title:  "Steam server statistics"
+categories: notebook
+author:
+- JBen
+excerpt: Source & Goldsource mod servers
+---
+
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><a href="https://colab.research.google.com/github/jben-hun/colab_notebooks/blob/master/steamServerStat.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a></p>
+
+</div>
+</div>
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>This notebook uses the <a href="https://developer.valvesoftware.com/wiki/Master_Server_Query_Protocol">Master Server Query Protocol</a> and <a href="https://developer.valvesoftware.com/wiki/Server_queries#Protocol">server queries</a> to get a server list and statistics of multiplayer <a href="https://developer.valvesoftware.com/wiki/Source">Source</a> and <a href="https://developer.valvesoftware.com/wiki/Goldsource">Goldsource</a> engine mods.</p>
+<ul>
+<li>This is for mods without an <a href="https://developer.valvesoftware.com/wiki/Steam_Application_IDs">AppID</a> and own <a href="https://developer.valvesoftware.com/wiki/Steam">Steam store page</a>, for those official mods there are <a href="https://store.steampowered.com/stats/">https://store.steampowered.com/stats/</a> and <a href="https://steamcharts.com/">https://steamcharts.com/</a></li>
+<li>Python Steam API package documentation: <a href="https://steam.readthedocs.io/en/stable/api/steam.game_servers.html">https://steam.readthedocs.io/en/stable/api/steam.game_servers.html</a></li>
+<li>Cool standalone server browser: <a href="https://github.com/PredatH0r/SteamServerBrowser">https://github.com/PredatH0r/SteamServerBrowser</a></li>
+</ul>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[1]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-python"><pre><span></span><span class="c1"># interactively display tables</span>
+<span class="o">%</span><span class="n">load_ext</span> <span class="n">google</span><span class="o">.</span><span class="n">colab</span><span class="o">.</span><span class="n">data_table</span>
+
+<span class="o">%</span><span class="n">pip</span> <span class="o">-</span><span class="n">q</span> <span class="n">install</span> <span class="n">steam</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[2]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-python"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">steam</span> <span class="kn">import</span> <span class="n">game_servers</span> <span class="k">as</span> <span class="n">gs</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+
+
+<span class="k">def</span> <span class="nf">get_server_list</span><span class="p">(</span><span class="o">*</span><span class="n">app_ids</span><span class="p">,</span> <span class="n">has_players</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">500</span><span class="p">):</span>
+    <span class="n">servers</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="nb">id</span> <span class="ow">in</span> <span class="n">app_ids</span><span class="p">:</span>
+        <span class="n">query_string</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">query_string</span> <span class="o">+=</span> <span class="sa">fr</span><span class="s2">&quot;\appid\</span><span class="si">{</span><span class="nb">id</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">query_string</span> <span class="o">+=</span> <span class="sa">fr</span><span class="s2">&quot;\empty\1&quot;</span> <span class="k">if</span> <span class="n">has_players</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">sub</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">gs</span><span class="o">.</span><span class="n">query_master</span><span class="p">(</span><span class="n">query_string</span><span class="p">,</span> <span class="n">max_servers</span><span class="o">=</span><span class="n">limit</span><span class="p">))</span>
+        <span class="n">servers</span> <span class="o">+=</span> <span class="n">sub</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">sub</span><span class="p">)</span><span class="si">}</span><span class="s2"> servers from query: </span><span class="se">\&quot;</span><span class="si">{</span><span class="n">query_string</span><span class="si">}</span><span class="se">\&quot;</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sub</span><span class="p">)</span> <span class="o">==</span> <span class="n">limit</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Warning, query response limit(</span><span class="si">{</span><span class="n">limit</span><span class="si">}</span><span class="s2">) reached, the &quot;</span>
+                  <span class="sa">f</span><span class="s2">&quot;result is possibly truncated, increase the limit&quot;</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">servers</span><span class="p">)</span><span class="si">}</span><span class="s2"> servers total&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">servers</span>
+
+
+<span class="k">def</span> <span class="nf">get_server_info</span><span class="p">(</span><span class="o">*</span><span class="n">servers</span><span class="p">,</span> <span class="n">apps</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="n">infos</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">server</span> <span class="ow">in</span> <span class="n">servers</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="n">gs</span><span class="o">.</span><span class="n">a2s_info</span><span class="p">(</span><span class="n">server</span><span class="p">)</span>
+
+            <span class="n">info</span><span class="p">[</span><span class="s2">&quot;address&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;:&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">server</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="s2">&quot;app_id&quot;</span> <span class="ow">in</span> <span class="n">info</span><span class="p">:</span>
+                <span class="n">info</span><span class="p">[</span><span class="s2">&quot;app&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">apps</span><span class="p">[</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;app_id&quot;</span><span class="p">]]</span> <span class="k">if</span> <span class="n">apps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                               <span class="k">else</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;app_id&quot;</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">info</span><span class="p">[</span><span class="s2">&quot;app&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
+
+
+            <span class="n">infos</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;address&quot;</span><span class="p">]</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">infos</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">set_index</span><span class="p">([</span><span class="s2">&quot;app&quot;</span><span class="p">,</span> <span class="s2">&quot;folder&quot;</span><span class="p">])</span>
+            <span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="s2">&quot;players&quot;</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+
+
+<span class="k">def</span> <span class="nf">display_player_count</span><span class="p">(</span><span class="n">info</span><span class="p">):</span>
+    <span class="n">display</span><span class="p">(</span>
+        <span class="n">info</span>
+        <span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">players</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">NamedAgg</span><span class="p">(</span><span class="n">column</span><span class="o">=</span><span class="s2">&quot;players&quot;</span><span class="p">,</span> <span class="n">aggfunc</span><span class="o">=</span><span class="s2">&quot;sum&quot;</span><span class="p">),</span>
+             <span class="n">populated_servers</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">NamedAgg</span><span class="p">(</span><span class="n">column</span><span class="o">=</span><span class="s2">&quot;players&quot;</span><span class="p">,</span> <span class="n">aggfunc</span><span class="o">=</span><span class="s2">&quot;count&quot;</span><span class="p">),</span>
+             <span class="n">mean_players_per_server</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">NamedAgg</span><span class="p">(</span><span class="n">column</span><span class="o">=</span><span class="s2">&quot;players&quot;</span><span class="p">,</span>
+                                                 <span class="n">aggfunc</span><span class="o">=</span><span class="s2">&quot;mean&quot;</span><span class="p">),</span>
+             <span class="n">game_names</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">NamedAgg</span><span class="p">(</span><span class="n">column</span><span class="o">=</span><span class="s2">&quot;game&quot;</span><span class="p">,</span> <span class="n">aggfunc</span><span class="o">=</span><span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">))</span>
+        <span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="s2">&quot;populated_servers&quot;</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">display_server_info</span><span class="p">(</span><span class="n">info</span><span class="p">):</span>
+    <span class="n">c</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;address&quot;</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;app_id&quot;</span><span class="p">,</span> <span class="s2">&quot;app&quot;</span><span class="p">,</span> <span class="s2">&quot;game_id&quot;</span><span class="p">,</span> <span class="s2">&quot;game&quot;</span><span class="p">,</span> <span class="s2">&quot;folder&quot;</span><span class="p">,</span>
+         <span class="s2">&quot;map&quot;</span><span class="p">,</span> <span class="s2">&quot;players&quot;</span><span class="p">,</span> <span class="s2">&quot;max_players&quot;</span><span class="p">,</span> <span class="s2">&quot;bots&quot;</span><span class="p">,</span> <span class="s2">&quot;_type&quot;</span><span class="p">,</span> <span class="s2">&quot;protocol&quot;</span><span class="p">,</span>
+         <span class="s2">&quot;server_type&quot;</span><span class="p">,</span> <span class="s2">&quot;environment&quot;</span><span class="p">,</span> <span class="s2">&quot;vac&quot;</span><span class="p">,</span> <span class="s2">&quot;version&quot;</span><span class="p">,</span> <span class="s2">&quot;keywords&quot;</span><span class="p">,</span>
+         <span class="s2">&quot;sourcetv_port&quot;</span><span class="p">,</span> <span class="s2">&quot;sourcetv_name&quot;</span><span class="p">]</span>
+
+    <span class="n">display</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span> <span class="n">c</span><span class="p">])</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[3]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-python"><pre><span></span><span class="c1"># Goldsource mods without a Steam page usually use Half-Life as the base game,</span>
+<span class="c1"># Source mods use their respective Source SDK Bases</span>
+<span class="n">apps</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="mi">70</span><span class="p">:</span> <span class="s2">&quot;Half-Life&quot;</span><span class="p">,</span>
+    <span class="mi">215</span><span class="p">:</span> <span class="s2">&quot;Source SDK Base 2006&quot;</span><span class="p">,</span>
+    <span class="mi">218</span><span class="p">:</span> <span class="s2">&quot;Source SDK Base 2007&quot;</span><span class="p">,</span>
+    <span class="mi">243750</span><span class="p">:</span> <span class="s2">&quot;Source SDK Base 2013 Multiplayer&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[4]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-python"><pre><span></span><span class="n">servers</span> <span class="o">=</span> <span class="n">get_server_list</span><span class="p">(</span><span class="o">*</span><span class="n">apps</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+<span class="n">info</span> <span class="o">=</span> <span class="n">get_server_info</span><span class="p">(</span><span class="o">*</span><span class="n">servers</span><span class="p">,</span> <span class="n">apps</span><span class="o">=</span><span class="n">apps</span><span class="p">)</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
+<pre>52 servers from query: &#34;\appid\70\empty\1&#34;
+9 servers from query: &#34;\appid\215\empty\1&#34;
+1 servers from query: &#34;\appid\218\empty\1&#34;
+9 servers from query: &#34;\appid\243750\empty\1&#34;
+71 servers total
+192.169.88.50:29035: timeout: timed out
+192.169.88.50:29035: RuntimeError: Invalid reponse header - b&#39;D&#39;
+18.156.63.218:27015: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: OSError: [Errno 113] No route to host
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+185.86.78.191:27015: timeout: timed out
+185.86.78.191:27015: RuntimeError: Invalid reponse header - b&#39;D&#39;
+31.131.249.69:27018: RuntimeError: Invalid reponse header - b&#39;D&#39;
+89.223.32.156:27010: RuntimeError: Invalid reponse header - b&#39;D&#39;
+185.171.25.194:27015: timeout: timed out
+5.53.16.212:27015: timeout: timed out
+45.235.98.40:27042: timeout: timed out
+37.201.231.181:10894: timeout: timed out
+37.201.231.181:10894: timeout: timed out
+78.47.20.213:27019: timeout: timed out
+78.47.20.213:27019: timeout: timed out
+78.47.20.213:27019: timeout: timed out
+78.47.20.213:27019: timeout: timed out
+78.47.20.213:27019: timeout: timed out
+</pre>
+</div>
+</div>
+
+</div>
+
+</div>
+
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[5]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-python"><pre><span></span><span class="n">display_player_count</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+<span class="n">display_server_info</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+
+<div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output " data-mime-type="text/html">
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>players</th>
+      <th>populated_servers</th>
+      <th>mean_players_per_server</th>
+      <th>game_names</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>(Half-Life, valve)</th>
+      <td>143</td>
+      <td>22</td>
+      <td>6.500000</td>
+      <td>Sev+|GG EDITION,D  A  W  N,H λ L F - L I F E,H...</td>
+    </tr>
+    <tr>
+      <th>(Half-Life, ag)</th>
+      <td>13</td>
+      <td>6</td>
+      <td>2.166667</td>
+      <td>HLCCL,AG FFA,AG TDM,HLCCL,AGT,AG TDM</td>
+    </tr>
+    <tr>
+      <th>(Source SDK Base 2006, hidden)</th>
+      <td>4</td>
+      <td>4</td>
+      <td>1.000000</td>
+      <td>Hidden : Source B4,Hidden : Source B4,Hidden :...</td>
+    </tr>
+    <tr>
+      <th>(Source SDK Base 2013 Multiplayer, tf2classic)</th>
+      <td>32</td>
+      <td>4</td>
+      <td>8.000000</td>
+      <td>Team Fortress 2 Classic,Deathrun Toolkit | 0.4...</td>
+    </tr>
+    <tr>
+      <th>(Source SDK Base 2006, gmod9)</th>
+      <td>6</td>
+      <td>2</td>
+      <td>3.000000</td>
+      <td>GMod 9.0.4,GMod 9.0.4</td>
+    </tr>
+    <tr>
+      <th>(Half-Life, dpbredux)</th>
+      <td>3</td>
+      <td>1</td>
+      <td>3.000000</td>
+      <td>Digital Paintball</td>
+    </tr>
+    <tr>
+      <th>(Half-Life, nnk)</th>
+      <td>1</td>
+      <td>1</td>
+      <td>1.000000</td>
+      <td>Naruto Naiteki Kensei R1</td>
+    </tr>
+    <tr>
+      <th>(Source SDK Base 2006, zombie_master)</th>
+      <td>2</td>
+      <td>1</td>
+      <td>2.000000</td>
+      <td>Zombie Master 1.2.1</td>
+    </tr>
+    <tr>
+      <th>(Source SDK Base 2007, gesource)</th>
+      <td>3</td>
+      <td>1</td>
+      <td>3.000000</td>
+      <td>Team Arsenal (MOD)</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+</div>
+
+</div>
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+
+<div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output " data-mime-type="text/html">
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>address</th>
+      <th>name</th>
+      <th>app_id</th>
+      <th>app</th>
+      <th>game_id</th>
+      <th>game</th>
+      <th>folder</th>
+      <th>map</th>
+      <th>players</th>
+      <th>max_players</th>
+      <th>bots</th>
+      <th>_type</th>
+      <th>protocol</th>
+      <th>server_type</th>
+      <th>environment</th>
+      <th>vac</th>
+      <th>version</th>
+      <th>keywords</th>
+      <th>sourcetv_port</th>
+      <th>sourcetv_name</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>54.39.130.18:27015</td>
+      <td>VaultF4.com - Official [US] Standard</td>
+      <td>243750</td>
+      <td>Source SDK Base 2013 Multiplayer</td>
+      <td>243750.0</td>
+      <td>Team Fortress 2 Classic</td>
+      <td>tf2classic</td>
+      <td>cp_coldfront</td>
+      <td>14</td>
+      <td>30</td>
+      <td>0</td>
+      <td>source</td>
+      <td>17</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>5394425</td>
+      <td>HLstatsX:CE,alltalk,cp,increased_maxplayers,no...</td>
+      <td>27020.0</td>
+      <td>SourceTV Test</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>23.124.59.250:27015</td>
+      <td>Gamers-Global.com|HLSTATS|SEV+|FASTDL|CUSTOM|1...</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>Sev+|GG EDITION</td>
+      <td>valve</td>
+      <td>7th_path</td>
+      <td>14</td>
+      <td>22</td>
+      <td>4</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.1.2.2</td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>84.22.153.100:27018</td>
+      <td>Dawn HL Crossfire Only</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>D  A  W  N</td>
+      <td>valve</td>
+      <td>crossfire</td>
+      <td>14</td>
+      <td>20</td>
+      <td>3</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>188.213.212.5:27015</td>
+      <td>|-&gt; -==[24/7]==- HL.Pyro-Zone.com &lt;-|</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>H λ L F - L I F E</td>
+      <td>valve</td>
+      <td>hl_assault</td>
+      <td>13</td>
+      <td>32</td>
+      <td>2</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>62.140.250.10:27015</td>
+      <td>! !--Good_Half-Life_Server--! !</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>Half-Life</td>
+      <td>valve</td>
+      <td>crossfire</td>
+      <td>13</td>
+      <td>32</td>
+      <td>1</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>78.152.169.100:27016</td>
+      <td>[VICTORY.KM.UA] Half-Life DM FFA</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>NaN</td>
+      <td>Half-Life</td>
+      <td>valve</td>
+      <td>closefire</td>
+      <td>13</td>
+      <td>32</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>0</td>
+      <td>1.1.2.7/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>192.223.30.68:27015</td>
+      <td>! !--Best_Half-Life_Server--! !</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>H λ L F - L I F E</td>
+      <td>valve</td>
+      <td>crossfire</td>
+      <td>10</td>
+      <td>10</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>84.22.153.100:27015</td>
+      <td>Dawn Half-Life</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>D  A  W  N</td>
+      <td>valve</td>
+      <td>dead-dust2</td>
+      <td>9</td>
+      <td>20</td>
+      <td>2</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>78.47.20.213:27019</td>
+      <td>⬛█ Death Ventures | Combat / Jailbreak / Death...</td>
+      <td>243750</td>
+      <td>Source SDK Base 2013 Multiplayer</td>
+      <td>243750.0</td>
+      <td>Deathrun Toolkit | 0.4.1</td>
+      <td>tf2classic</td>
+      <td>dr_bank_v12a</td>
+      <td>9</td>
+      <td>24</td>
+      <td>0</td>
+      <td>source</td>
+      <td>17</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>5394425</td>
+      <td>deathrun,deathventures,jailbreak,teamfortress2...</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>192.169.88.50:29035</td>
+      <td>*L.T.K*Clan Server 1</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>Severian's Mod</td>
+      <td>valve</td>
+      <td>dutch_wonderfire</td>
+      <td>7</td>
+      <td>26</td>
+      <td>3</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.1.2.2</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>51.195.91.179:27016</td>
+      <td>VaultF4.com - Official [EU] Randomizer</td>
+      <td>243750</td>
+      <td>Source SDK Base 2013 Multiplayer</td>
+      <td>243750.0</td>
+      <td>Team Fortress 2 Classic</td>
+      <td>tf2classic</td>
+      <td>plr_hightower</td>
+      <td>6</td>
+      <td>24</td>
+      <td>0</td>
+      <td>source</td>
+      <td>17</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>5394425</td>
+      <td>HLstatsX:CE</td>
+      <td>27021.0</td>
+      <td>SourceTV Test</td>
+    </tr>
+    <tr>
+      <th>11</th>
+      <td>185.86.78.191:27015</td>
+      <td>-=-=- hldm-ARENA.cf:27015 crossfire -=-=-</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>Half-Life</td>
+      <td>valve</td>
+      <td>crossfire</td>
+      <td>6</td>
+      <td>24</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>12</th>
+      <td>85.14.226.179:27015</td>
+      <td>Xen-Raiders AG 2016 by ngz-server.de</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>HLCCL</td>
+      <td>ag</td>
+      <td>crossfire</td>
+      <td>5</td>
+      <td>18</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>13</th>
+      <td>46.0.203.113:27015</td>
+      <td>K_P_A_C_A_B_A  C_E_P_B_E_P</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>[ Music Server ]</td>
+      <td>valve</td>
+      <td>dk_katklub</td>
+      <td>5</td>
+      <td>18</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>0</td>
+      <td>1.6.3.7/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>14</th>
+      <td>145.239.108.67:27015</td>
+      <td>*L.T.K*Clan Server 3</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>Severian's Mod</td>
+      <td>valve</td>
+      <td>tig_nite</td>
+      <td>5</td>
+      <td>26</td>
+      <td>3</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.1.2.2</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>15</th>
+      <td>139.162.49.132:27015</td>
+      <td>! !--Asia_Half-Life_Server--! !</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>NaN</td>
+      <td>H A L F - L I F E</td>
+      <td>valve</td>
+      <td>the_yard2</td>
+      <td>5</td>
+      <td>12</td>
+      <td>2</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.7/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>16</th>
+      <td>31.131.249.69:27018</td>
+      <td>GunGame 2.2 - HLDM.ORG</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>NaN</td>
+      <td>Half-Life</td>
+      <td>valve</td>
+      <td>ps2waypoint</td>
+      <td>5</td>
+      <td>32</td>
+      <td>3</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.7/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>17</th>
+      <td>5.53.16.212:27015</td>
+      <td>[hlserv] DM + weaponmod</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>NaN</td>
+      <td>Severian's Mod+</td>
+      <td>valve</td>
+      <td>crossfire</td>
+      <td>5</td>
+      <td>16</td>
+      <td>1</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.7/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>18</th>
+      <td>192.145.47.121:27017</td>
+      <td>nafrayus server</td>
+      <td>215</td>
+      <td>Source SDK Base 2006</td>
+      <td>NaN</td>
+      <td>GMod 9.0.4</td>
+      <td>gmod9</td>
+      <td>gm_construct</td>
+      <td>4</td>
+      <td>16</td>
+      <td>0</td>
+      <td>source</td>
+      <td>7</td>
+      <td>d</td>
+      <td>w</td>
+      <td>0</td>
+      <td>1.0.1.0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>19</th>
+      <td>5.53.16.212:27017</td>
+      <td>[hlserv] Crossfire 24\7</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>NaN</td>
+      <td>Severian's Mod+</td>
+      <td>valve</td>
+      <td>crossfire</td>
+      <td>4</td>
+      <td>24</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.7/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>20</th>
+      <td>89.223.32.156:27010</td>
+      <td>AIMaster HL DM 1 | Newbies ONLY</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>NaN</td>
+      <td>Half-Life</td>
+      <td>valve</td>
+      <td>crossfire</td>
+      <td>4</td>
+      <td>20</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.1.2.7/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>21</th>
+      <td>94.23.247.37:27040</td>
+      <td>HL2GO.COM - HLDM [EU]</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>NaN</td>
+      <td>Half-Life</td>
+      <td>valve</td>
+      <td>dust2x2</td>
+      <td>3</td>
+      <td>32</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.7/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>22</th>
+      <td>104.238.180.59:27065</td>
+      <td>Official DPB Redux Field | USA | West</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>Digital Paintball</td>
+      <td>dpbredux</td>
+      <td>NXL_TexasOpen_2018</td>
+      <td>3</td>
+      <td>20</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>23</th>
+      <td>89.216.18.137:27025</td>
+      <td>CobraNetwork: AGmod | FFA | Crossfire</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>AG FFA</td>
+      <td>ag</td>
+      <td>crossfire</td>
+      <td>3</td>
+      <td>10</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.1.2.2</td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>24</th>
+      <td>85.117.240.15:27025</td>
+      <td>  ►  BlackWonder US TF2C | Hightower | No Car...</td>
+      <td>243750</td>
+      <td>Source SDK Base 2013 Multiplayer</td>
+      <td>243750.0</td>
+      <td>  ►  Hightower  ◄</td>
+      <td>tf2classic</td>
+      <td>plr_hightower</td>
+      <td>3</td>
+      <td>64</td>
+      <td>0</td>
+      <td>source</td>
+      <td>17</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>5394425</td>
+      <td>increased_maxplayers,_registered,afk,alltalk,b...</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>25</th>
+      <td>74.91.114.38:27015</td>
+      <td>Noob's Wonderland</td>
+      <td>218</td>
+      <td>Source SDK Base 2007</td>
+      <td>218.0</td>
+      <td>Team Arsenal (MOD)</td>
+      <td>gesource</td>
+      <td>ge_facility_classic</td>
+      <td>3</td>
+      <td>22</td>
+      <td>0</td>
+      <td>source</td>
+      <td>17</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.0.1.0</td>
+      <td>HLstatsX:CE,alltalk,autoteamplay,increased_max...</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>26</th>
+      <td>45.155.125.20:27025</td>
+      <td>SADECE PIMPLER</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>Half-Life</td>
+      <td>valve</td>
+      <td>crossfire</td>
+      <td>2</td>
+      <td>16</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>27</th>
+      <td>172.107.174.142:27015</td>
+      <td>-=OAK=- Dallas, Texas</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>Severian's Mod</td>
+      <td>valve</td>
+      <td>Boot2</td>
+      <td>2</td>
+      <td>16</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>28</th>
+      <td>78.46.191.68:27016</td>
+      <td>AGHLDM DE #2 | 1000 FPS | FastDL</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>AG TDM</td>
+      <td>ag</td>
+      <td>stalkx</td>
+      <td>2</td>
+      <td>32</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>29</th>
+      <td>45.235.98.40:27042</td>
+      <td>||LegenDary Team :-)</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>www.4evergaming.com.ar</td>
+      <td>valve</td>
+      <td>stalkx</td>
+      <td>2</td>
+      <td>12</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>30</th>
+      <td>37.201.231.181:10894</td>
+      <td>LEMCraft der pro</td>
+      <td>215</td>
+      <td>Source SDK Base 2006</td>
+      <td>NaN</td>
+      <td>GMod 9.0.4</td>
+      <td>gmod9</td>
+      <td>gm_construct</td>
+      <td>2</td>
+      <td>16</td>
+      <td>0</td>
+      <td>source</td>
+      <td>7</td>
+      <td>l</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.0.1.0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>31</th>
+      <td>149.28.44.79:27017</td>
+      <td>-DTR- Almost Vanilla ZM Server (+RTD,RTV)</td>
+      <td>215</td>
+      <td>Source SDK Base 2006</td>
+      <td>NaN</td>
+      <td>Zombie Master 1.2.1</td>
+      <td>zombie_master</td>
+      <td>zm_zombiefacility_v2</td>
+      <td>2</td>
+      <td>16</td>
+      <td>1</td>
+      <td>source</td>
+      <td>7</td>
+      <td>d</td>
+      <td>w</td>
+      <td>0</td>
+      <td>1.0.1.0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>32</th>
+      <td>18.156.63.218:27015</td>
+      <td>NPN Half-Life Server</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>Half-Life</td>
+      <td>valve</td>
+      <td>crossfire</td>
+      <td>1</td>
+      <td>20</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.1.2.2</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>33</th>
+      <td>185.107.96.114:27015</td>
+      <td>SiDiouS Phys Server FF-Off PS-Off</td>
+      <td>215</td>
+      <td>Source SDK Base 2006</td>
+      <td>215.0</td>
+      <td>Hidden : Source B4</td>
+      <td>hidden</td>
+      <td>hdn_barrel_warz_v1</td>
+      <td>1</td>
+      <td>9</td>
+      <td>1</td>
+      <td>source</td>
+      <td>7</td>
+      <td>d</td>
+      <td>w</td>
+      <td>0</td>
+      <td>1.0.1.0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>34</th>
+      <td>74.91.124.33:27015</td>
+      <td>The Living Dead - Hidden Source Server pshove/...</td>
+      <td>215</td>
+      <td>Source SDK Base 2006</td>
+      <td>215.0</td>
+      <td>Hidden : Source B4</td>
+      <td>hidden</td>
+      <td>hdn_demise</td>
+      <td>1</td>
+      <td>9</td>
+      <td>1</td>
+      <td>source</td>
+      <td>7</td>
+      <td>d</td>
+      <td>w</td>
+      <td>0</td>
+      <td>1.0.1.0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>35</th>
+      <td>162.248.93.98:27015</td>
+      <td>Stabbiη Cabiη ♢ Ranked ♢ PS:Shove|FF:Reflect</td>
+      <td>215</td>
+      <td>Source SDK Base 2006</td>
+      <td>215.0</td>
+      <td>Hidden : Source B4</td>
+      <td>hidden</td>
+      <td>hdn_physics_arena_final</td>
+      <td>1</td>
+      <td>9</td>
+      <td>1</td>
+      <td>source</td>
+      <td>7</td>
+      <td>d</td>
+      <td>w</td>
+      <td>0</td>
+      <td>1.0.1.0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>36</th>
+      <td>173.24.229.150:27015</td>
+      <td>Playground~Genuine~Gaming~HL~Linux</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>Half-Life</td>
+      <td>valve</td>
+      <td>atticrats_ro</td>
+      <td>1</td>
+      <td>15</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>0</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>37</th>
+      <td>74.91.113.158:27015</td>
+      <td>OL'Farts Gaming www.olfartsgaming.com</td>
+      <td>215</td>
+      <td>Source SDK Base 2006</td>
+      <td>215.0</td>
+      <td>Hidden : Source B4</td>
+      <td>hidden</td>
+      <td>hdn_docks</td>
+      <td>1</td>
+      <td>9</td>
+      <td>1</td>
+      <td>source</td>
+      <td>7</td>
+      <td>d</td>
+      <td>w</td>
+      <td>0</td>
+      <td>1.0.1.0</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>38</th>
+      <td>95.216.140.175:27015</td>
+      <td>{Helsinki} DM Server by [Z] Chuck Moris</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>Naruto Naiteki Kensei R1</td>
+      <td>nnk</td>
+      <td>nnk_preliminary</td>
+      <td>1</td>
+      <td>25</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>w</td>
+      <td>1</td>
+      <td>1.1.2.7/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>39</th>
+      <td>112.213.38.144:27020</td>
+      <td>AG Australia [1000fps]</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>HLCCL</td>
+      <td>ag</td>
+      <td>no_remorse</td>
+      <td>1</td>
+      <td>10</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>40</th>
+      <td>185.171.25.194:27015</td>
+      <td>[AGT] AGTurkiye Turnuva Sunucusu* |TR| #2</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>AGT</td>
+      <td>ag</td>
+      <td>datacore</td>
+      <td>1</td>
+      <td>32</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>d</td>
+      <td>l</td>
+      <td>1</td>
+      <td>1.1.2.2/Stdio</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>41</th>
+      <td>109.184.60.233:27015</td>
+      <td>www.planethalflife.com/agmod</td>
+      <td>70</td>
+      <td>Half-Life</td>
+      <td>70.0</td>
+      <td>AG TDM</td>
+      <td>ag</td>
+      <td>ag_crossfire</td>
+      <td>1</td>
+      <td>32</td>
+      <td>0</td>
+      <td>source</td>
+      <td>48</td>
+      <td>l</td>
+      <td>w</td>
+      <td>0</td>
+      <td>1.1.2.2/Stdio</td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>

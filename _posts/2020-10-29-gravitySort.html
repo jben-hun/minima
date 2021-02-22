@@ -1,0 +1,244 @@
+---
+layout: post
+title:  "Gravity sort"
+categories: notebook
+author:
+- JBen
+excerpt: ""
+---
+
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><a href="https://colab.research.google.com/github/jben-hun/colab_notebooks/blob/master/gravitySort.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a></p>
+
+</div>
+</div>
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>Gravity sort, a.k.a. bead sort is a fun sorting method for positive integers. The area of interest of this algorithm is hardware supported "bead dropping" to fill the role of gravity, which makes it work fast in theory. Extending to negative integers is straightforward by shifting the values to $\mathbb{N}_0$ before sorting.</p>
+<p>Complexity:</p>
+<ul>
+<li>Time: $\mathcal{O}(n*m)$</li>
+<li>Space: $\mathcal{O}(n*m)$, or $\mathcal{O}(n+m)$ in memory conservative mode</li>
+</ul>
+<p>Where $n$ is the number of values and $m$ is the maximal value of the array.</p>
+
+</div>
+</div>
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><strong>Definition</strong></p>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-ipython3"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">seaborn</span> <span class="k">as</span> <span class="nn">sns</span>
+<span class="n">sns</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">style</span><span class="o">=</span><span class="s2">&quot;whitegrid&quot;</span><span class="p">)</span>
+
+<span class="n">unsorted</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">is_monotone</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">decreasing</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">decreasing</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">strict</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">a</span><span class="o">&lt;</span><span class="n">b</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">a</span><span class="o">&lt;=</span><span class="n">b</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">strict</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">a</span><span class="o">&gt;</span><span class="n">b</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">a</span><span class="o">&gt;=</span><span class="n">b</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">gravity_sort</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">memory_conservative</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">maximum</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">memory_conservative</span><span class="p">:</span>
+        <span class="n">sums</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">maximum</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">length</span><span class="p">):</span>
+            <span class="n">sums</span><span class="p">[:</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="n">sums_old</span> <span class="o">=</span> <span class="n">sums</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">sums</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">maximum</span><span class="p">):</span>
+            <span class="n">sums</span><span class="p">[:</span><span class="n">sums_old</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">maximum</span><span class="p">)[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span> <span class="o">&lt;</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+        <span class="n">sums</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+        <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">length</span><span class="p">)[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">sums</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="n">sums</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">reverse</span><span class="p">:</span>
+        <span class="n">sums</span> <span class="o">=</span> <span class="n">sums</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">sums</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+</div>
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><strong>Demonstration</strong></p>
+<p>Comparing with NumPy's built-in sorter</p>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-ipython3"><pre><span></span><span class="o">%</span><span class="k">timeit</span> np.sort(unsorted)
+<span class="o">%</span><span class="k">timeit</span> gravity_sort(unsorted)
+<span class="o">%</span><span class="k">timeit</span> gravity_sort(unsorted, memory_conservative=True)
+
+<span class="nb">sorted</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">unsorted</span><span class="p">)</span>
+<span class="n">gravity_sorted</span> <span class="o">=</span> <span class="n">gravity_sort</span><span class="p">(</span><span class="n">unsorted</span><span class="p">)</span>
+<span class="n">gravity_sorted_conservative</span> <span class="o">=</span> <span class="n">gravity_sort</span><span class="p">(</span><span class="n">unsorted</span><span class="p">,</span> <span class="n">memory_conservative</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">unsorted</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">sorted</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">gravity_sorted</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">gravity_sorted_conservative</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">is_monotone</span><span class="p">(</span><span class="n">unsorted</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">is_monotone</span><span class="p">(</span><span class="nb">sorted</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">is_monotone</span><span class="p">(</span><span class="n">gravity_sorted</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">is_monotone</span><span class="p">(</span><span class="n">gravity_sorted_conservative</span><span class="p">))</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
+<pre>The slowest run took 22.84 times longer than the fastest. This could mean that an intermediate result is being cached.
+100000 loops, best of 3: 2.25 µs per loop
+The slowest run took 12.49 times longer than the fastest. This could mean that an intermediate result is being cached.
+10000 loops, best of 3: 19.2 µs per loop
+10000 loops, best of 3: 44.9 µs per loop
+[4 0 9 6 0 1 4 9 1 0]
+[0 0 0 1 1 4 4 6 9 9]
+[0 0 0 1 1 4 4 6 9 9]
+[0 0 0 1 1 4 4 6 9 9]
+False
+True
+True
+True
+</pre>
+</div>
+</div>
+
+</div>
+
+</div>
+
+</div>
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><strong>Visualization</strong></p>
+<p>Plotting the "gravity-shifted" values with Matplotlib</p>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># copy of input</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">unsorted</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+<span class="c1"># the sort</span>
+<span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">maximum</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+
+<span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">maximum</span><span class="p">)[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span> <span class="o">&lt;</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+<span class="n">sums</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+<span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">length</span><span class="p">)[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">sums</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span>
+<span class="n">sums</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+<span class="c1"># plot</span>
+<span class="n">fig</span><span class="p">,</span> <span class="n">axs</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">sharex</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">sharey</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xticks</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">maximum</span><span class="p">),</span> <span class="n">labels</span><span class="o">=</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">maximum</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">yticks</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">length</span><span class="p">))</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">maximum</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">length</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">axs</span><span class="p">:</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;magnitude&#39;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;index&#39;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">length</span><span class="p">):</span>
+    <span class="n">axs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">i</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">length</span><span class="p">):</span>
+    <span class="n">axs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">sums</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">sums</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">i</span><span class="p">))</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+
+
+<div class="jp-RenderedImage jp-OutputArea-output ">
+<img src="data:image/png;base64,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
+"
+>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><strong>References</strong></p>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Bead_sort">https://en.wikipedia.org/wiki/Bead_sort</a></li>
+</ul>
+
+</div>
+</div>
