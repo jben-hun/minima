@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "Breadth/depth-first fraversal"
+title:  "Breadth/depth-first traversal"
 categories: notebook
 author:
 - Jenei Bendegúz

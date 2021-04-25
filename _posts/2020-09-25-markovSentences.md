@@ -328,7 +328,7 @@ display(pd.DataFrame(dict_data))
 ```
 
 
-<div>
+<div style="overflow: auto;">
 <style scoped>
     .dataframe tbody tr th:only-of-type {
         vertical-align: middle;
@@ -500,7 +500,7 @@ display(pd.DataFrame(dict_data))
 ```
 
 
-<div>
+<div style="overflow: auto;">
 <style scoped>
     .dataframe tbody tr th:only-of-type {
         vertical-align: middle;
