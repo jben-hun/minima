@@ -7,158 +7,242 @@ author:
 excerpt: Source & Goldsource mod servers
 ---
 
-<a href="https://colab.research.google.com/github/jben-hun/colab_notebooks/blob/master/SteamServerStat.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><a href="https://colab.research.google.com/github/jben-hun/colab_notebooks/blob/master/SteamServerStat.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a></p>
 
-This notebook uses the [Master Server Query Protocol](https://developer.valvesoftware.com/wiki/Master_Server_Query_Protocol) and [server queries](https://developer.valvesoftware.com/wiki/Server_queries#Protocol) to get a server list and statistics of multiplayer [Source](https://developer.valvesoftware.com/wiki/Source) and [Goldsource](https://developer.valvesoftware.com/wiki/Goldsource) engine mods.
-*   This is for mods without an [AppID](https://developer.valvesoftware.com/wiki/Steam_Application_IDs) and own [Steam store page](https://developer.valvesoftware.com/wiki/Steam), for those official mods there are <https://store.steampowered.com/stats/> and <https://steamcharts.com/>
-*   Python Steam API package documentation: <https://steam.readthedocs.io/en/stable/api/steam.game_servers.html>
-*   Cool standalone server browser: <https://github.com/PredatH0r/SteamServerBrowser>
+</div>
+</div>
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>This notebook uses the <a href="https://developer.valvesoftware.com/wiki/Master_Server_Query_Protocol">Master Server Query Protocol</a> and <a href="https://developer.valvesoftware.com/wiki/Server_queries#Protocol">server queries</a> to get a server list and statistics of multiplayer <a href="https://developer.valvesoftware.com/wiki/Source">Source</a> and <a href="https://developer.valvesoftware.com/wiki/Goldsource">Goldsource</a> engine mods.</p>
+<ul>
+<li>This is for mods without an <a href="https://developer.valvesoftware.com/wiki/Steam_Application_IDs">AppID</a> and own <a href="https://developer.valvesoftware.com/wiki/Steam">Steam store page</a>, for those official mods there are <a href="https://store.steampowered.com/stats/">https://store.steampowered.com/stats/</a> and <a href="https://steamcharts.com/">https://steamcharts.com/</a></li>
+<li>Python Steam API package documentation: <a href="https://steam.readthedocs.io/en/stable/api/steam.game_servers.html">https://steam.readthedocs.io/en/stable/api/steam.game_servers.html</a></li>
+<li>Cool standalone server browser: <a href="https://github.com/PredatH0r/SteamServerBrowser">https://github.com/PredatH0r/SteamServerBrowser</a></li>
+</ul>
 
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[1]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-python"><pre><span></span><span class="c1"># interactively display tables</span>
+<span class="o">%</span><span class="n">load_ext</span> <span class="n">google</span><span class="o">.</span><span class="n">colab</span><span class="o">.</span><span class="n">data_table</span>
 
-```python
-# interactively display tables
-%load_ext google.colab.data_table
+<span class="o">%</span><span class="n">pip</span> <span class="o">-</span><span class="n">q</span> <span class="n">install</span> <span class="n">steam</span>
+</pre></div>
 
-%pip -q install steam
-```
+     </div>
+</div>
+</div>
+</div>
 
-
-```python
-import numpy as np
-import pandas as pd
-from steam import game_servers as gs
-from collections import defaultdict
-
-
-def get_server_list(*app_ids, has_players=True, limit=500):
-    servers = []
-
-    for id in app_ids:
-        query_string = ""
-        query_string += fr"\appid\{id}"
-        query_string += fr"\empty\1" if has_players else ""
-        sub = list(gs.query_master(query_string, max_servers=limit))
-        servers += sub
-
-        print(f"{len(sub)} servers from query: \"{query_string}\"")
-        if len(sub) == limit:
-            print(f"Warning, query response limit({limit}) reached, the "
-                  f"result is possibly truncated, increase the limit")
-
-    print(f"{len(servers)} servers total")
-
-    return servers
-
-
-def get_server_info(*servers, apps=None):
-    infos = []
-    for server in servers:
-        try:
-            info = gs.a2s_info(server)
-
-            info["address"] = ":".join(map(str, server))
-
-            if "app_id" in info:
-                info["app"] = (apps[info["app_id"]] if apps is not None
-                               else info["app_id"])
-            else:
-                info["app"] = "unknown"
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[2]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-python"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">steam</span> <span class="kn">import</span> <span class="n">game_servers</span> <span class="k">as</span> <span class="n">gs</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
 
 
-            infos.append(info)
+<span class="k">def</span> <span class="nf">get_server_list</span><span class="p">(</span><span class="o">*</span><span class="n">app_ids</span><span class="p">,</span> <span class="n">has_players</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">500</span><span class="p">):</span>
+    <span class="n">servers</span> <span class="o">=</span> <span class="p">[]</span>
 
-        except Exception as e:
-            print(f"""{info["address"]}: {type(e).__name__}: {e}""")
+    <span class="k">for</span> <span class="nb">id</span> <span class="ow">in</span> <span class="n">app_ids</span><span class="p">:</span>
+        <span class="n">query_string</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">query_string</span> <span class="o">+=</span> <span class="sa">fr</span><span class="s2">&quot;\appid\</span><span class="si">{</span><span class="nb">id</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">query_string</span> <span class="o">+=</span> <span class="sa">fr</span><span class="s2">&quot;\empty\1&quot;</span> <span class="k">if</span> <span class="n">has_players</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">sub</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">gs</span><span class="o">.</span><span class="n">query_master</span><span class="p">(</span><span class="n">query_string</span><span class="p">,</span> <span class="n">max_servers</span><span class="o">=</span><span class="n">limit</span><span class="p">))</span>
+        <span class="n">servers</span> <span class="o">+=</span> <span class="n">sub</span>
 
-    return (pd.DataFrame(infos)
-            .set_index(["app", "folder"])
-            .sort_values(by="players", ascending=False))
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">sub</span><span class="p">)</span><span class="si">}</span><span class="s2"> servers from query: </span><span class="se">\&quot;</span><span class="si">{</span><span class="n">query_string</span><span class="si">}</span><span class="se">\&quot;</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sub</span><span class="p">)</span> <span class="o">==</span> <span class="n">limit</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Warning, query response limit(</span><span class="si">{</span><span class="n">limit</span><span class="si">}</span><span class="s2">) reached, the &quot;</span>
+                  <span class="sa">f</span><span class="s2">&quot;result is possibly truncated, increase the limit&quot;</span><span class="p">)</span>
 
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">servers</span><span class="p">)</span><span class="si">}</span><span class="s2"> servers total&quot;</span><span class="p">)</span>
 
-def display_player_count(info):
-    display(
-        info
-        .groupby(info.index)
-        .agg(players=pd.NamedAgg(column="players", aggfunc="sum"),
-             populated_servers=pd.NamedAgg(column="players", aggfunc="count"),
-             mean_players_per_server=pd.NamedAgg(column="players",
-                                                 aggfunc="mean"),
-             game_names=pd.NamedAgg(column="game", aggfunc=",".join))
-        .sort_values(by="populated_servers", ascending=False)
-    )
+    <span class="k">return</span> <span class="n">servers</span>
 
 
-def display_server_info(info):
-    c = ["address", "name", "app_id", "app", "game_id", "game", "folder",
-         "map", "players", "max_players", "bots", "_type", "protocol",
-         "server_type", "environment", "vac", "version", "keywords",
-         "sourcetv_port", "sourcetv_name"]
+<span class="k">def</span> <span class="nf">get_server_info</span><span class="p">(</span><span class="o">*</span><span class="n">servers</span><span class="p">,</span> <span class="n">apps</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="n">infos</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">server</span> <span class="ow">in</span> <span class="n">servers</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="n">gs</span><span class="o">.</span><span class="n">a2s_info</span><span class="p">(</span><span class="n">server</span><span class="p">)</span>
 
-    display(info.reset_index().loc[:, c])
-```
+            <span class="n">info</span><span class="p">[</span><span class="s2">&quot;address&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;:&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">server</span><span class="p">))</span>
 
-
-```python
-# Goldsource mods without a Steam page usually use Half-Life as the base game,
-# Source mods use their respective Source SDK Bases
-apps = {
-    70: "Half-Life",
-    215: "Source SDK Base 2006",
-    218: "Source SDK Base 2007",
-    243750: "Source SDK Base 2013 Multiplayer",
-}
-```
+            <span class="k">if</span> <span class="s2">&quot;app_id&quot;</span> <span class="ow">in</span> <span class="n">info</span><span class="p">:</span>
+                <span class="n">info</span><span class="p">[</span><span class="s2">&quot;app&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">apps</span><span class="p">[</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;app_id&quot;</span><span class="p">]]</span> <span class="k">if</span> <span class="n">apps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                               <span class="k">else</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;app_id&quot;</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">info</span><span class="p">[</span><span class="s2">&quot;app&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
 
 
-```python
-servers = get_server_list(*apps.keys())
-info = get_server_info(*servers, apps=apps)
-```
+            <span class="n">infos</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
 
-    52 servers from query: "\appid\70\empty\1"
-    9 servers from query: "\appid\215\empty\1"
-    1 servers from query: "\appid\218\empty\1"
-    9 servers from query: "\appid\243750\empty\1"
-    71 servers total
-    192.169.88.50:29035: timeout: timed out
-    192.169.88.50:29035: RuntimeError: Invalid reponse header - b'D'
-    18.156.63.218:27015: timeout: timed out
-    78.46.191.68:27016: timeout: timed out
-    78.46.191.68:27016: timeout: timed out
-    78.46.191.68:27016: OSError: [Errno 113] No route to host
-    78.46.191.68:27016: timeout: timed out
-    78.46.191.68:27016: timeout: timed out
-    78.46.191.68:27016: timeout: timed out
-    78.46.191.68:27016: timeout: timed out
-    78.46.191.68:27016: timeout: timed out
-    78.46.191.68:27016: timeout: timed out
-    78.46.191.68:27016: timeout: timed out
-    78.46.191.68:27016: timeout: timed out
-    78.46.191.68:27016: timeout: timed out
-    185.86.78.191:27015: timeout: timed out
-    185.86.78.191:27015: RuntimeError: Invalid reponse header - b'D'
-    31.131.249.69:27018: RuntimeError: Invalid reponse header - b'D'
-    89.223.32.156:27010: RuntimeError: Invalid reponse header - b'D'
-    185.171.25.194:27015: timeout: timed out
-    5.53.16.212:27015: timeout: timed out
-    45.235.98.40:27042: timeout: timed out
-    37.201.231.181:10894: timeout: timed out
-    37.201.231.181:10894: timeout: timed out
-    78.47.20.213:27019: timeout: timed out
-    78.47.20.213:27019: timeout: timed out
-    78.47.20.213:27019: timeout: timed out
-    78.47.20.213:27019: timeout: timed out
-    78.47.20.213:27019: timeout: timed out
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;address&quot;</span><span class="p">]</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">infos</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">set_index</span><span class="p">([</span><span class="s2">&quot;app&quot;</span><span class="p">,</span> <span class="s2">&quot;folder&quot;</span><span class="p">])</span>
+            <span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="s2">&quot;players&quot;</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+
+
+<span class="k">def</span> <span class="nf">display_player_count</span><span class="p">(</span><span class="n">info</span><span class="p">):</span>
+    <span class="n">display</span><span class="p">(</span>
+        <span class="n">info</span>
+        <span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">players</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">NamedAgg</span><span class="p">(</span><span class="n">column</span><span class="o">=</span><span class="s2">&quot;players&quot;</span><span class="p">,</span> <span class="n">aggfunc</span><span class="o">=</span><span class="s2">&quot;sum&quot;</span><span class="p">),</span>
+             <span class="n">populated_servers</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">NamedAgg</span><span class="p">(</span><span class="n">column</span><span class="o">=</span><span class="s2">&quot;players&quot;</span><span class="p">,</span> <span class="n">aggfunc</span><span class="o">=</span><span class="s2">&quot;count&quot;</span><span class="p">),</span>
+             <span class="n">mean_players_per_server</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">NamedAgg</span><span class="p">(</span><span class="n">column</span><span class="o">=</span><span class="s2">&quot;players&quot;</span><span class="p">,</span>
+                                                 <span class="n">aggfunc</span><span class="o">=</span><span class="s2">&quot;mean&quot;</span><span class="p">),</span>
+             <span class="n">game_names</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">NamedAgg</span><span class="p">(</span><span class="n">column</span><span class="o">=</span><span class="s2">&quot;game&quot;</span><span class="p">,</span> <span class="n">aggfunc</span><span class="o">=</span><span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">))</span>
+        <span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="s2">&quot;populated_servers&quot;</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">display_server_info</span><span class="p">(</span><span class="n">info</span><span class="p">):</span>
+    <span class="n">c</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;address&quot;</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;app_id&quot;</span><span class="p">,</span> <span class="s2">&quot;app&quot;</span><span class="p">,</span> <span class="s2">&quot;game_id&quot;</span><span class="p">,</span> <span class="s2">&quot;game&quot;</span><span class="p">,</span> <span class="s2">&quot;folder&quot;</span><span class="p">,</span>
+         <span class="s2">&quot;map&quot;</span><span class="p">,</span> <span class="s2">&quot;players&quot;</span><span class="p">,</span> <span class="s2">&quot;max_players&quot;</span><span class="p">,</span> <span class="s2">&quot;bots&quot;</span><span class="p">,</span> <span class="s2">&quot;_type&quot;</span><span class="p">,</span> <span class="s2">&quot;protocol&quot;</span><span class="p">,</span>
+         <span class="s2">&quot;server_type&quot;</span><span class="p">,</span> <span class="s2">&quot;environment&quot;</span><span class="p">,</span> <span class="s2">&quot;vac&quot;</span><span class="p">,</span> <span class="s2">&quot;version&quot;</span><span class="p">,</span> <span class="s2">&quot;keywords&quot;</span><span class="p">,</span>
+         <span class="s2">&quot;sourcetv_port&quot;</span><span class="p">,</span> <span class="s2">&quot;sourcetv_name&quot;</span><span class="p">]</span>
+
+    <span class="n">display</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span> <span class="n">c</span><span class="p">])</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[3]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-python"><pre><span></span><span class="c1"># Goldsource mods without a Steam page usually use Half-Life as the base game,</span>
+<span class="c1"># Source mods use their respective Source SDK Bases</span>
+<span class="n">apps</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="mi">70</span><span class="p">:</span> <span class="s2">&quot;Half-Life&quot;</span><span class="p">,</span>
+    <span class="mi">215</span><span class="p">:</span> <span class="s2">&quot;Source SDK Base 2006&quot;</span><span class="p">,</span>
+    <span class="mi">218</span><span class="p">:</span> <span class="s2">&quot;Source SDK Base 2007&quot;</span><span class="p">,</span>
+    <span class="mi">243750</span><span class="p">:</span> <span class="s2">&quot;Source SDK Base 2013 Multiplayer&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[4]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-python"><pre><span></span><span class="n">servers</span> <span class="o">=</span> <span class="n">get_server_list</span><span class="p">(</span><span class="o">*</span><span class="n">apps</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+<span class="n">info</span> <span class="o">=</span> <span class="n">get_server_info</span><span class="p">(</span><span class="o">*</span><span class="n">servers</span><span class="p">,</span> <span class="n">apps</span><span class="o">=</span><span class="n">apps</span><span class="p">)</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
     
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 
 
-```python
-display_player_count(info)
-display_server_info(info)
-```
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
+<pre>52 servers from query: &#34;\appid\70\empty\1&#34;
+9 servers from query: &#34;\appid\215\empty\1&#34;
+1 servers from query: &#34;\appid\218\empty\1&#34;
+9 servers from query: &#34;\appid\243750\empty\1&#34;
+71 servers total
+192.169.88.50:29035: timeout: timed out
+192.169.88.50:29035: RuntimeError: Invalid reponse header - b&#39;D&#39;
+18.156.63.218:27015: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: OSError: [Errno 113] No route to host
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+78.46.191.68:27016: timeout: timed out
+185.86.78.191:27015: timeout: timed out
+185.86.78.191:27015: RuntimeError: Invalid reponse header - b&#39;D&#39;
+31.131.249.69:27018: RuntimeError: Invalid reponse header - b&#39;D&#39;
+89.223.32.156:27010: RuntimeError: Invalid reponse header - b&#39;D&#39;
+185.171.25.194:27015: timeout: timed out
+5.53.16.212:27015: timeout: timed out
+45.235.98.40:27042: timeout: timed out
+37.201.231.181:10894: timeout: timed out
+37.201.231.181:10894: timeout: timed out
+78.47.20.213:27019: timeout: timed out
+78.47.20.213:27019: timeout: timed out
+78.47.20.213:27019: timeout: timed out
+78.47.20.213:27019: timeout: timed out
+78.47.20.213:27019: timeout: timed out
+</pre>
+</div>
+</div>
+
+</div>
+
+</div>
+
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[5]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-python"><pre><span></span><span class="n">display_player_count</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+<span class="n">display_server_info</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
 
 
-<div style="overflow: auto;">
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+
+<div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output " data-mime-type="text/html">
+<div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
         vertical-align: middle;
@@ -249,10 +333,19 @@ display_server_info(info)
   </tbody>
 </table>
 </div>
+</div>
+
+</div>
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 
 
 
-<div style="overflow: auto;">
+<div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output " data-mime-type="text/html">
+<div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
         vertical-align: middle;
@@ -1261,4 +1354,13 @@ display_server_info(info)
     </tr>
   </tbody>
 </table>
+</div>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
 </div>
